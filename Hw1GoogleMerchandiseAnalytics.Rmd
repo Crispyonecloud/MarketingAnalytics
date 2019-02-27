@@ -1,0 +1,131 @@
+---
+title: "Hw1GoogleAnalytics"
+author: "Bryan Tamsir, Erik Chu, Hariz Mohd Rani Hisham, Yi-Yun Su"
+date: "1/22/2019"
+output: html_document
+---
+
+```{r Setup}
+#Set WD 
+rm(list = ls()) #to clear global environment
+library(data.table)
+```
+
+```{r Upload Data Manually and set a key}
+dtsum = fread("~/Documents/Academic/MA/hw1/GoogleMerchandise2016_2017_summary.csv")
+dthits = fread("~/Documents/Academic/MA/hw1/GoogleMerchandise2016_2017_Hits.csv")
+
+```
+
+### Question 1
+
+1. What share of visits with products added to cart end in a purchase?
+
+We set the keys as fullVisitorId, visitId, and hitNumber
+We subsetted the hits data for action types 3 and 6
+Merge both data tables and grouped by fVId and vId
+
+```{r q1}
+# Create new Data Table
+uniqueN(dthits[, .(fullVisitorId, visitId, hitNumber)] ) / dthits[,.N]
+setkey(dthits, fullVisitorId, visitId, hitNumber)
+
+table(dthits$action_type)
+#67 # for actiontype 3
+#24484 for actiontype 6
+
+#Subset into appropriate data table and set the key for each. 
+purchase = dthits[action_type==6, .(fullVisitorId, visitId, action_type) ]
+addtocart = dthits[action_type==3, .(fullVisitorId, visitId, action_type) ]
+checkout = dthits[action_type==5, .(fullVisitorId, visitId, action_type) ]
+
+#Set keys for all data tables
+setkey(purchase, fullVisitorId, visitId, action_type)
+setkey(addtocart, fullVisitorId, visitId, action_type)
+setkey(checkout, fullVisitorId, visitId, action_type)
+
+final = merge(addtocart, purchase, by=c("fullVisitorId", "visitId"), all.x = TRUE)
+onea = sum(final$action_type.y == 6, na.rm = T) / sum(final$action_type.x == 3) #for some reason the first half does not work
+onea
+#answer is 5.797%
+```
+```{r q1: course discussion}
+shr = dthits[,.(numAdd = sum(action_type == 3, na.rm = T), numPur = sum(action_type == 6, na.rm = T)),.(fullVisitorId, visitId)]
+onea = sum(shr$numPur > 0, na.rm = T) / sum(shr$numAdd > 0) 
+onea
+```
+### Question 1b
+
+1b. What share of visits with a "Check out\"" end in a purchase?
+
+``` {r q1b}
+finalb = merge(checkout, purchase, by=c("fullVisitorId", "visitId"), all.x = TRUE, allow.cartesian=TRUE)
+oneb = sum(finalb[!is.na(action_type.y), .N]) / sum(finalb$action_type.x == 5)
+oneb
+# answer is 84%
+```
+### Question 2
+
+What is the distribution of time from the start of a session to when a purchase is made? Plot hist, mean, min, max, median.
+
+Subset on action type 6 (purchases) from hits table
+Set keys
+Divided time by 60000 to convert ms to minutes
+View histogram 
+
+``` {r q2}
+time1 = dthits[action_type == 6, .(fullVisitorId, visitId, action_type, time, hitNumber) ]
+setkey(time1, fullVisitorId, visitId, hitNumber)
+hist( 
+  time1$time / 60000, 
+  breaks=50,
+  main="Time between the start of a session and a Purchase", xlab="minutes")
+summary(time1$time / 60000) #in minutes
+
+```
+### Question 3
+
+Q3 - What is the distribution of time from “Check out” to “purchase made”? Plot the histogram and report the min, max, mean and median.
+
+```{r q3}
+purchase3 = dthits[action_type == 6, .(fullVisitorId, visitId, action_type, time) ]
+
+dthits[action_type == 5, time1 := min(time), .(fullVisitorId, visitId)]
+checkout3 = dthits[action_type==5, .(fullVisitorId, visitId, action_type, time1) ]
+
+setkey(purchase3, fullVisitorId, visitId)
+setkey(checkout3, fullVisitorId, visitId)
+
+temp = merge(checkout3, purchase3, 
+                  by = c("fullVisitorId", "visitId"), 
+                  all.x = TRUE,
+                  allow.cartesian = TRUE)
+question3 = temp[complete.cases(temp), ]
+question3[ , timeDiff := ifelse((time - time1) > 0, time- time1, NA)]
+question3$timeDiff = question3$timeDiff / 60000
+
+hist( 
+  question3[, timeDiff], 
+  breaks = 50,
+  main = "Time between checkout and purchase", xlab = "Time in minutes")
+summary(question3$timeDiff)
+```
+### Question 4
+
+What are the bounce rates for the ten largest landing pages (largest by number of visits.)
+(Hint: this will require you to merge the "Hits" and "Summary" data sets. See the document "data.table-Keys-andMerge.Rmd" for help.)
+
+Merge hits with summary on fVId and vId 
+Calculated number of obs for each unique landing screen name 
+Calculated bounces rates for each unique landing screen name
+Output: List of landing screen names, bounce rate associated, no. of obs.
+
+``` {r q4}
+hits_4 <- merge(dtsum, 
+                dthits[, .(fullVisitorId, visitId, hitNumber, landingScreenName)], 
+                by = c("fullVisitorId", "visitId")) 
+
+hits_4[, .(bouncerate = sum(bounces, na.rm = T) / .N, N_obs = .N), 
+       landingScreenName][order(-N_obs)][1:10]
+
+```
