@@ -1,0 +1,1209 @@
+---
+title: "Final BA Project"
+author: "Prerana Patil" "Yi-Yun Su" "Tai-Hua Chung" "Apoorva Srinivas"
+output: word_document
+---
+
+#==========================================================
+## SET UP R MARKDOWN
+#==========================================================
+```{r}
+# You should generally clear the working space at the start of every R session
+rm(list = ls())
+
+# Set the directory
+setwd("~/Documents/Academic/OMIS/RProjects/FinalProject")
+
+# install packages
+#install.packages("stargazer")
+#install.packages("ggeffects")
+#install.packages("QuantPsyc")
+#install.packages("VIF")
+#install.packages("usdm")
+#install.packages("lmtest")
+#install.packages("multiwayvcov")
+#install.packages("sandwich")
+#install.packages("AER")
+#install.packages("aod")
+#install.packages("mfx")
+#install.packages("dplyr", dependencies=TRUE)
+#install.packages("nycflights13")
+#install.packages("readstata13")
+#install.packages("sjPlot")
+#install.packages("sjmisc")
+
+# Load libraries everytime you start a session
+library(stargazer)
+library(gdata)
+library(ggplot2)
+library(psych) 
+library(ggeffects)
+library(QuantPsyc)
+library(usdm)
+library(lmtest)
+library(multiwayvcov)
+library(VIF)
+library(sandwich)
+library(foreign)
+library(AER)
+library(aod)
+library(Rcpp)
+library(mfx)
+library(nnet)
+library(reshape2)
+library(readstata13)
+library(dplyr)
+#library(nycflights13)
+#library(sjPlot)
+#library(sjmisc)
+
+# turn off scientific notation except for big numbers. 
+options(scipen = 9)
+```
+#==========================================================
+## LOAD, EXPLORE AND CLEAN DATA
+#==========================================================
+```{r}
+
+## LOAD 4 DATASET
+ConsumerData = read.dta13("/Users/bellesu/Documents/Academic/OMIS/RProjects/FinalProject/consumer level data.dta")
+OnlineDailyPCData = read.dta13("/Users/bellesu/Documents/Academic/OMIS/RProjects/FinalProject/online daily prod_cat sales-returns data.dta")
+OnlineDailyData = read.dta13("/Users/bellesu/Documents/Academic/OMIS/RProjects/FinalProject/online daily sales-returns data.dta")
+TransactionData = read.dta13("/Users/bellesu/Documents/Academic/OMIS/RProjects/FinalProject/transaction level data.dta")
+
+#create data frame for replacing null values of 4 tables
+dfOnlineDailyData <- OnlineDailyData
+dfOnlineDailyPCData <- OnlineDailyPCData
+dfConsumerData <- ConsumerData
+dfTransactionData <- TransactionData
+
+#Create data frame for the original values of the 4 tables
+dfOGOnlineDailyData <- OnlineDailyData
+dfOGOnlineDailyPCData <- OnlineDailyPCData
+dfOGConsumerData <- ConsumerData
+dfOGTransactionData <- TransactionData
+
+# basic descriptive statistics
+stargazer(dfOnlineDailyData, type="text", median=TRUE, iqr=TRUE,digits=1, title="Descriptive Statistics")
+stargazer(dfOnlineDailyPCData, type="text", median=TRUE, iqr=TRUE,digits=1, title="Descriptive Statistics")
+stargazer(dfConsumerData, type="text", median=TRUE, iqr=TRUE,digits=1, title="Descriptive Statistics")
+stargazer(dfTransactionData, type="text", median=TRUE, iqr=TRUE,digits=1, title="Descriptive Statistics") 
+
+```
+#==========================================================
+## Question 1 impact of implementing BOPS on Online Sales
+#==========================================================
+```{r}
+#creating grouping variable for store number
+dfOnlineDailyData$ChannelGroup <- ifelse(dfOnlineDailyData$store_number == 5998,0,1)
+dfOGOnlineDailyData$ChannelGroup <- ifelse(dfOGOnlineDailyData$store_number == 5998,0,1)
+##Creating variable for time zone
+dfOnlineDailyData<-dfOnlineDailyData[!(dfOnlineDailyData$day>788),] #Delete values after Sept 2011, Since Sept. 26, 2011 is the last day that channel 5998 had not yet implemented BOPS, the day is actually 788 
+dfOGOnlineDailyData<-dfOGOnlineDailyData[!(dfOGOnlineDailyData$day>788),] #do the same for OG data frame
+dfOnlineDailyData$Time <- ifelse(dfOnlineDailyData$day <= 365,0,1) # Create time variable, since Aug. 1, 2011 is the day that channels 2 & 6 implemented BOPS, the day is 366
+dfOGOnlineDailyData$Time <- ifelse(dfOGOnlineDailyData$day <= 365,0,1) # do the same for OG data frame
+
+#******DATA TREATMENT - TABLE ONLINE DAILY SALES RETURNS DATA******
+# FOR AVG AGE
+#check how many entries have NA values
+any(is.na(dfOnlineDailyData$avg_age))
+summary(dfOnlineDailyData$avg_age)
+#replace NA vaues with mean of avg_age
+dfOnlineDailyData$avg_age <- ifelse(is.na(dfOnlineDailyData$avg_age) == TRUE, mean(dfOnlineDailyData$avg_age, na.rm = TRUE), dfOnlineDailyData$avg_age) 
+
+# FOR AVG FEMALE
+any(is.na(dfOnlineDailyData$avg_female))
+summary(dfOnlineDailyData$avg_female)
+#replace NA vaues with mean of avg_female
+dfOnlineDailyData$avg_female <- ifelse(is.na(dfOnlineDailyData$avg_female) == TRUE, mean(dfOnlineDailyData$avg_female, na.rm = TRUE), dfOnlineDailyData$avg_female) 
+
+# FOR AVG CHILDOWNER
+any(is.na(dfOnlineDailyData$avg_childowner))
+summary(dfOnlineDailyData$avg_childowner)
+#replace NA vaues with mean of avg_childowner
+dfOnlineDailyData$avg_childowner <- ifelse(is.na(dfOnlineDailyData$avg_childowner) == TRUE, mean(dfOnlineDailyData$avg_childowner, na.rm = TRUE), dfOnlineDailyData$avg_childowner)
+
+# FOR AVG HOMEOWNER
+any(is.na(dfOnlineDailyData$avg_homeowner))
+summary(dfOnlineDailyData$avg_homeowner)
+#replace NA vaues with mean of avg_homeowner
+dfOnlineDailyData$avg_homeowner <- ifelse(is.na(dfOnlineDailyData$avg_homeowner) == TRUE, mean(dfOnlineDailyData$avg_homeowner, na.rm = TRUE), dfOnlineDailyData$avg_homeowner)
+
+# FOR AVG INCOME
+any(is.na(dfOnlineDailyData$avg_income))
+summary(dfOnlineDailyData$avg_income)
+#replace NA vaues with mean of avg_income
+dfOnlineDailyData$avg_income <- ifelse(is.na(dfOnlineDailyData$avg_income) == TRUE, mean(dfOnlineDailyData$avg_income, na.rm = TRUE), dfOnlineDailyData$avg_income)
+
+# FOR AVG RESIDENCY
+any(is.na(dfOnlineDailyData$avg_residency))
+summary(dfOnlineDailyData$avg_residency)
+#replace NA vaues with mean of avg_residency
+dfOnlineDailyData$avg_residency <- ifelse(is.na(dfOnlineDailyData$avg_residency) == TRUE, mean(dfOnlineDailyData$avg_residency, na.rm = TRUE), dfOnlineDailyData$avg_residency)
+
+#checking if sales value follows normal distribution
+ggplot(dfOnlineDailyData, aes(x=salesvalue)) + geom_histogram(colour="green")
+#log sales value
+dfOnlineDailyData$logsalesvalue <- log(1 + dfOnlineDailyData$salesvalue)
+
+#log sales value for OG data frame
+dfOGOnlineDailyData$logsalesvalue = log(1 + dfOGOnlineDailyData$salesvalue)
+
+#checking for colinearity
+dfcol <- data.frame(dfOnlineDailyData$bops_in_effect,dfOnlineDailyData$avg_age, dfOnlineDailyData$avg_childowner, dfOnlineDailyData$avg_female, dfOnlineDailyData$avg_homeowner, dfOnlineDailyData$avg_residency)
+cor(dfcol) #no correlation between the varibles used
+vifcor(dfcol) #no multicolinearity in the model
+
+#Run OLS model on data frame with original values
+model1a<- lm(logsalesvalue~Time+ChannelGroup+Time*ChannelGroup+avg_age+avg_female+avg_income+avg_childowner, data=dfOGOnlineDailyData) 
+
+#OLS model on data frame with mean values 
+model1b<- lm(logsalesvalue~Time+ChannelGroup+Time*ChannelGroup+avg_age+avg_female+avg_income+avg_childowner, data=dfOnlineDailyData) 
+
+stargazer(model1a, model1b, title="Regression Results", type="text", column.labels=c("Model-OG Values", "Model-Mean Values"), df=FALSE, digits=4, star.cutoffs = c(0.05,0.01,0.001)) #before replacing na values with mean the data the interaction term is not significant. When the missing values are replaced the interaction term is significant.
+
+step <- stepAIC(model1b,direction="both")
+step$anova #even R thinks the variables used are fine
+
+# Check for heteroscedasticity
+gqtest(model1b) # Goldfeld-Quandt test is not significant
+bptest(model1b) # Breusch-Pagan test is significant
+
+#we go ahead with model with mean values as results are more accurate
+HWrobstder <- sqrt(diag(vcovHC(model1b, type="HC1"))) # produces Huber-White robust standard errors 
+stargazer(model1b, se=list( HWrobstder), title="Regression Results", type="text", column.labels=c("HW-Robust SE"), df=FALSE, digits=4, star.cutoffs = c(0.05,0.01,0.001)) # displays normal/HW robust standard errors.
+
+#Marginal plots for sales value
+meffects1 <- ggpredict(model1b, terms=c("Time", "ChannelGroup")) 
+ggplot(meffects1,aes(x, predicted, colour=group)) + geom_line(size=1.3) + xlab("Time") + ylab("Sales Value") + labs(colour="Channel") + scale_colour_discrete(labels=c("Channel 5998", "Channels 2 & 6")) + scale_x_continuous(breaks=c(0,1), labels=c("BOPS not implemented", "BOPS implemented")) + theme(axis.title.x=element_blank())
+
+```
+```{r Poisson: sales quantity}
+
+poisson1 <- glm(salesquantity ~ Time*ChannelGroup+avg_female+avg_age+avg_income+avg_residency+avg_childowner, family="poisson", data= dfOnlineDailyData)
+
+stargazer(poisson1,  
+          title="Regression Results", type="text", 
+          column.labels=c("poisson1"),
+          df=FALSE, digits=2, star.cutoffs = c(0.05,0.01,0.001)) # The coefficient for B:G1 is -0.25.
+
+## Model fit assessment 
+poisson1a <- glm(salesquantity~1, data=dfOnlineDailyData, family="poisson") #run null model 
+
+lrtest(poisson1, poisson1a) # The test is statistically significant, it indicates that the data does fit the model well.
+
+```
+```{r NB model for sales quantity}
+
+negbin1 <- glm.nb(salesquantity ~ Time*ChannelGroup+avg_female+avg_age+avg_income+avg_residency+avg_childowner, data = dfOnlineDailyData)
+
+stargazer(negbin1,  
+          title="Regression Results", type="text", 
+          column.labels=c("negbin1"),
+          df=FALSE, digits=2, star.cutoffs = c(0.05,0.01,0.001))# The variable B:G1 has a coefficient of -0.31, which is statistically significant. This means that for each one-unit increase in , the expected log count of sales quantity decrease by 0.31. 
+
+# Model fit assessment
+negbin1a <- glm.nb(salesquantity ~ 1, data = dfOnlineDailyData) 
+
+lrtest(negbin1, negbin1a) # Model fits the data because LR test statistics (968.55) is  significant.
+
+# Obtain IRRs
+stargazer(negbin1, 
+          apply.coef = exp, t.auto=F, p.auto = F,
+          title="Regression Results", type="text", 
+          column.labels=c("IRRs"),
+          df=FALSE, digits=4, star.cutoffs = c(0.05,0.01,0.001)) # We might be interested in looking at incident rate ratios rather than coefficients. To do this, we can exponentiate our model coefficients. The output indicates that the incident rate for Time:ChannelGroup is 0.7302.
+
+# Check for heteroscedasticity
+
+gqtest(negbin1) # Goldfeld-Quandt test indicates heteroscedasticity
+bptest(negbin1) # Breusch-Pagan test indicates heteroscedasticity
+
+HWrobstder <- sqrt(diag(vcovHC(negbin1, type="HC1"))) # produces Huber-White robust standard errors 
+
+#adjust for heteroskadasticity
+stargazer(negbin1, negbin1,  
+          se=list(NULL, HWrobstder),
+          title="Regression Results", type="text", 
+          column.labels=c("Normal SE", "HW-Robust SE"),
+          df=FALSE, digits=2, star.cutoffs = c(0.05,0.01,0.001))  #
+
+#obtain IRR results when adjusted for heteroskedasticity 
+stargazer(negbin1, negbin1,  
+          apply.coef = exp, t.auto=F, p.auto = F,
+           se=list(NULL, HWrobstder),
+          title="Regression Results", type="text", 
+          column.labels=c("Normal SE", "HW-Robust SE"),
+          df=FALSE, digits=2, star.cutoffs = c(0.05,0.01,0.001))
+
+# Visualize the output
+# Marginal plots for SALES QUANTITY
+meffects <- ggpredict(negbin1, terms=c("Time [0,1]", "ChannelGroup [0,1]")) # generates a tidy data frame at three different values of competence  
+
+ggplot(meffects,aes(x, predicted, colour=group)) + geom_line(size=1.3) + 
+    xlab("BOPS implement timing") + ylab("Sales Quantity") +
+    labs(colour="Store Group") +  scale_colour_discrete(labels=c("5998", "2 and 6"))+ scale_x_continuous(breaks=c(0,1), labels=c("No BOPS", "BOPS")) + theme(axis.title.x=element_blank())
+
+```
+#==========================================================
+## Question 2 Impact of implementing BOPS on Online Channel Returns
+#==========================================================
+```{r}
+#checking if return value follows normal distribution
+ggplot(dfOnlineDailyData, aes(x=returnvalue)) + geom_histogram(colour="green")
+dfOnlineDailyData$logreturnvalue <- log(1 + dfOnlineDailyData$returnvalue)
+ggplot(dfOnlineDailyData, aes(x=logreturnvalue)) + geom_histogram(colour="green")
+dfOGOnlineDailyData$logreturnvalue <- log(1 + dfOGOnlineDailyData$returnvalue)
+
+model2a<- lm(logreturnvalue~Time+ChannelGroup+Time*ChannelGroup+avg_age+avg_female+avg_income+logsalesvalue, data=dfOGOnlineDailyData) 
+
+model2b<- lm(logreturnvalue~Time+ChannelGroup+Time*ChannelGroup+avg_age+avg_female+avg_income+logsalesvalue, data=dfOnlineDailyData) 
+
+stargazer(model2a, model2b, title="Regression Results", type="text", column.labels=c("Model-2a", "Model-2b"), df=FALSE, digits=4, star.cutoffs = c(0.05,0.01,0.001))
+
+# Check for heteroscedasticity
+gqtest(model2b) # Goldfeld-Quandt test is significant
+bptest(model2b) # Breusch-Pagan test is significant
+
+HWrobstder <- sqrt(diag(vcovHC(model2b, type="HC1"))) # produces Huber-White robust standard errors 
+stargazer(model2b, se=list(HWrobstder), title="Regression Results", type="text", column.labels=c("HW-Robust SE"), df=FALSE, digits=4, star.cutoffs = c(0.05,0.01,0.001)) # displays normal/HW robust standard errors.
+
+# Marginal plots for RETRUN VALUE
+meffects <- ggpredict(model2b, terms=c("Time [0,1]", "ChannelGroup [0,1]")) # generates a tidy data frame at three different values of competence  
+
+ggplot(meffects,aes(x, predicted, colour=group)) + geom_line(size=1.3) + 
+    xlab("BOPS implement timing") + ylab("Reutrn Value") +
+    labs(colour="Store Group") +  scale_colour_discrete(labels=c("5998", "2 and 6"))+ scale_x_continuous(breaks=c(0,1), labels=c("No BOPS", "BOPS")) + theme(axis.title.x=element_blank())
+
+```
+
+```{r Poisson: return quantity}
+
+poisson_RQ_1 <- glm(returnquantity ~ Time*ChannelGroup+avg_female+ logsalesvalue +avg_age+avg_income, family="poisson", data= dfOnlineDailyData)
+
+stargazer(poisson_RQ_1,  
+          title="Regression Results", type="text", 
+          column.labels=c("Model-1"),
+          df=FALSE, digits=2, star.cutoffs = c(0.05,0.01,0.001)) # The coefficient for B:G1 is -0.25.
+
+## Model fit assessment 
+poisson_RQ_1a <- glm(returnquantity~1, data=dfOnlineDailyData, family="poisson") #run null model 
+
+lrtest(poisson_RQ_1, poisson_RQ_1a) # The test is statistically significant, it indicates that the data does not fit the model well.
+
+```
+
+```{r NB model for return quantity}
+# neg bin: sales quantity
+negbin_RQ_1 <- glm.nb(returnquantity ~ Time*ChannelGroup+ logsalesvalue +avg_female+avg_age+avg_income, data = dfOnlineDailyData)
+
+stargazer(negbin_RQ_1,  
+          title="Regression Results", type="text", 
+          column.labels=c("Model-1"),
+          df=FALSE, digits=2, star.cutoffs = c(0.05,0.01,0.001))# The variable Time:ChannelGroup  has a coefficient of -0.24, which is statistically significant. This means that for each one-unit increase in B:G1, the expected log count of return quantity decrease by 0.24. 
+
+# Model fit assessment
+negbin_RQ_1a <- glm.nb(returnquantity ~ 1, data = dfOnlineDailyData) 
+
+lrtest(negbin_RQ_1, negbin_RQ_1a) # # Model fits the data because LR test statistics (5684) is  significant.
+
+# Obtain IRRs
+stargazer(negbin_RQ_1, 
+          apply.coef = exp, t.auto=F, p.auto = F,
+          title="Regression Results", type="text", 
+          column.labels=c("IRRs"),
+          df=FALSE, digits=4, star.cutoffs = c(0.05,0.01,0.001)) # The output indicates that the incident rate for Time:ChannelGroup is 0.7858. The percent change in the incident rate of return quantity decrease by a factor of 0.7858 for every unit increase in Time:ChannelGroup.
+
+# Check for heteroscedasticity
+gqtest(negbin_RQ_1) # Goldfeld-Quandt test does not indicate heteroscedasticity
+bptest(negbin_RQ_1) # Breusch-Pagan test indicates heteroscedasticity
+
+HWrobstder <- sqrt(diag(vcovHC(negbin_RQ_1, type="HC1"))) 
+stargazer(negbin_RQ_1, negbin_RQ_1,  
+          apply.coef = exp, t.auto=F, p.auto = F,
+          se=list(NULL, HWrobstder),
+          title="Regression Results", type="text", 
+          column.labels=c("Normal SE", "HW-Robust SE"),
+          df=FALSE, digits=4, star.cutoffs = c(0.05,0.01,0.001))  # 
+
+# Marginal plots for RETRUN QUANTITY
+meffects <- ggpredict(negbin_RQ_1, terms=c("Time [0,1]", "ChannelGroup [0,1]")) # generates a tidy data frame at three different values of competence  
+
+ggplot(meffects,aes(x, predicted, colour=group)) + geom_line(size=1.3) + 
+    xlab("BOPS implement timing") + ylab("Reutrn Quantity") +
+    labs(colour="Store Group") +  scale_colour_discrete(labels=c("5998", "2 and 6"))+ scale_x_continuous(breaks=c(0,1), labels=c("No BOPS", "BOPS")) + theme(axis.title.x=element_blank())
+```
+#==========================================================
+## Question 3 Impact of using BOPS service on online customer purchase behavior
+#==========================================================
+```{r}
+#*** DATA TREATMENT FOR CONSUMERDATA****
+# FOR AGE BAND
+summary(dfConsumerData$age_band)
+#replace NA vaues with mean of avg_income
+dfConsumerData$age_band <- ifelse(is.na(dfConsumerData$age_band) == TRUE, mean(dfConsumerData$age_band, na.rm = TRUE), dfConsumerData$age_band)
+
+# FOR EST INCOME CODE
+summary(dfConsumerData$est_income_code)
+#replace NA vaues with mean of avg_income
+dfConsumerData$est_income_code <- ifelse(is.na(dfConsumerData$est_income_code) == TRUE, mean(dfConsumerData$est_income_code, na.rm = TRUE), dfConsumerData$est_income_code)
+
+# FOR LENGTH OF RESIDENCE
+summary(dfConsumerData$length_of_residence)
+#replace NA vaues with mean of avg_income
+dfConsumerData$length_of_residence <- ifelse(is.na(dfConsumerData$length_of_residence) == TRUE, mean(dfConsumerData$length_of_residence, na.rm = TRUE), dfConsumerData$length_of_residence)
+
+# FOR FEMALE
+summary(dfConsumerData$female)
+#replace NA vaues with mean of avg_income
+dfConsumerData$female <- ifelse(is.na(dfConsumerData$female) == TRUE, mean(dfConsumerData$female, na.rm = TRUE), dfConsumerData$female)
+
+#make child and homeowner code a dummy variable
+dfConsumerData$IsChild = ifelse(dfConsumerData$child == 'Y', 1,0)
+dfConsumerData$IsHomeowner = ifelse(dfConsumerData$homeowner_code == "R", 1, 0)
+#make same changes in the Original Dataset
+dfOGConsumerData$IsChild = ifelse(dfOGConsumerData$child == 'Y', 1,0)
+dfOGConsumerData$IsHomeowner = ifelse(dfOGConsumerData$homeowner_code == "R", 1, 0)
+
+
+#check if sales value follows normal distribution. If not then create a new variable containing log values
+ggplot(data = dfConsumerData, aes(x=salesvalue)) + geom_histogram(colour = "green")
+dfConsumerData$logsalesvalue = log(1 + dfConsumerData$salesvalue)
+ggplot(data = dfConsumerData, aes(x=logsalesvalue)) + geom_histogram(colour = "green")
+dfOGConsumerData$logsalesvalue = log(1 + dfOGConsumerData$salesvalue)
+ggplot(data = dfConsumerData, aes(x=est_income_code)) + geom_histogram(colour = "green")
+
+#creating grouping variable for store number
+dfConsumerData$ChannelGroup <- ifelse(dfConsumerData$store_number == 5998,0,1)
+dfOGConsumerData$ChannelGroup <- ifelse(dfOGConsumerData$store_number == 5998,0,1)
+
+dfCor3 <- data.frame(dfConsumerData$age_band, dfConsumerData$est_income_code, dfConsumerData$IsChild,dfConsumerData$IsHomeowner, dfConsumerData$female)
+cor(dfCor3)
+vifcor(dfCor3) #no multicolinearity detected
+
+model3a = lm(logsalesvalue~bops_user+bops_user*bops_in_effect+bops_in_effect+age_band+est_income_code+female+IsChild+IsHomeowner, data = dfOGConsumerData)
+
+model3b = lm(logsalesvalue~bops_user+bops_user*bops_in_effect+bops_in_effect+age_band+est_income_code+female+IsChild+IsHomeowner, data = dfConsumerData)
+
+stargazer(model3a,model3b, title="Regression Results", type="text", column.labels=c("Model-3a","Model-3b"), df=FALSE, digits=4, star.cutoffs = c(0.05,0.01,0.001)) #the results for dataset with and without mean values are similar. Hence we report only one model output.
+
+stargazer(model3a, title="Regression Results", type="text", column.labels=c("Model-3a"), df=FALSE, digits=4, star.cutoffs = c(0.05,0.01,0.001)) 
+
+# Check for heteroscedasticity
+gqtest(model3a) # Significant Goldfeld-Quandt test is not significant
+bptest(model3a) # Significant Breusch-Pagan test is significant
+
+HWrobstder <- sqrt(diag(vcovHC(model3a, type="HC1"))) # produces Huber-White robust standard errors 
+stargazer(model3a, se=list(HWrobstder), title="Regression Results", type="text", column.labels=c("HW-Robust SE"), df=FALSE, digits=4, star.cutoffs = c(0.05,0.01,0.001)) # Report these results
+
+#Marginal plots for model with return value
+meffects3 <- ggpredict(model3a, terms=c("bops_in_effect","bops_user")) 
+ggplot(meffects3,aes(x, predicted, colour=group)) + geom_line(size=1.3) + xlab("bops in effect") + ylab("Sales Value") + labs(colour="BOPS User") + scale_colour_discrete(labels=c("Not a BOPS User", "BOPS User")) + scale_x_continuous(breaks=c(0,1), labels=c("BOPS not in effect", "BOPS in effect")) + theme(axis.title.x=element_blank())
+
+```
+#==========================================================
+## Question 4 Impact of using the BOPS service on online customer return behavior
+#==========================================================
+```{r}
+
+
+ggplot(dfTransactionData, aes(x=price)) + geom_histogram(colour="green")
+#Testing price with log
+dfTransactionData$logprice <- log(1 + dfTransactionData$price)
+
+#DATA CLEANING
+# FOR AGE_BAND
+summary(dfTransactionData$age_band)
+#replace NA vaues with mean of avg_income
+dfTransactionData$age_band <- ifelse(is.na(dfTransactionData$age_band) == TRUE, mean(dfTransactionData$age_band, na.rm = TRUE), dfTransactionData$age_band)
+
+# FOR EST INCOME CODE
+summary(dfTransactionData$est_income_code)
+#replace NA vaues with mean of avg_income
+dfTransactionData$est_income_code <- ifelse(is.na(dfTransactionData$est_income_code) == TRUE, mean(dfTransactionData$est_income_code, na.rm = TRUE), dfTransactionData$est_income_code)
+
+# FOR LENGTH OF RESIDENCE
+summary(dfTransactionData$length_of_residence)
+#replace NA vaues with mean of avg_income
+dfTransactionData$length_of_residence <- ifelse(is.na(dfTransactionData$length_of_residence) == TRUE, mean(dfTransactionData$length_of_residence, na.rm = TRUE), dfTransactionData$length_of_residence)
+
+# FOR FEMALE
+summary(dfTransactionData$female)
+#replace NA vaues with mean of avg_income
+dfTransactionData$female <- ifelse(is.na(dfTransactionData$female) == TRUE, mean(dfTransactionData$female, na.rm = TRUE), dfTransactionData$female)
+
+#make child and homeowner code a dummy variable
+summary(dfTransactionData$child)  
+dfTransactionData$IsChild = ifelse(dfTransactionData$child == 'Y', 1,0)
+dfTransactionData$IsHomeowner = ifelse(dfTransactionData$homeowner_code == "R", 1, 0)
+
+# FOR BOPS BAND
+summary(dfTransactionData$bops)
+#Deleting NA values from BOPS
+dfTransactionData <- dfTransactionData[!(dfTransactionData$year < 2011),]
+dfTransactionData <- dfTransactionData[!(dfTransactionData$year == 2011 & dfTransactionData$month_dummy < 9 ),]
+dfTransactionData <- dfTransactionData[!(dfTransactionData$year == 2012 & dfTransactionData$month_dummy < 10 & dfTransactionData$store_number == 5998),]
+dfTransactionData <- dfTransactionData[!(dfTransactionData$year == 2011 & dfTransactionData$store_number == 5998),]
+
+#Probit model 
+probit1 <- glm( return ~ bops  + logprice + factor(month_dummy) +factor(year) + age_band +est_income_code+female, data=dfTransactionData, family=binomial(link="probit"))
+
+stargazer(probit1, se=list(NULL), title="Regression Results", type="text", column.labels=c("Normal SE"), df=FALSE, digits=4, star.cutoffs = c(0.05,0.01,0.001))
+
+#Marginal Effect for Probit
+a <- probitmfx(formula=return ~ bops+ logprice +factor(month_dummy) + factor(year)+ age_band+est_income_code+female, data=dfTransactionData) # We can generate the marginal effects with this command. The one unit increase in selling pressure increases the probability of return by 0.168, holding other variables at their means
+marginaleffects_probit <- a$mfxest[,1]
+marg.std.err_probit <- a$mfxest[,2]
+
+stargazer(probit1, omit=c("Constant"),coef = list(marginaleffects_probit), se = list(marg.std.err_probit), title="Marginal Effects", type="text", column.labels=c("Probit"),df=FALSE, digits=4, star.cutoffs = c(0.05,0.01,0.001))
+
+#Marginal Effects for Probit with Robust Std Errors
+b <- probitmfx(formula=return ~ bops + logprice  + factor(month_dummy)+factor(year)+age_band+est_income_code+female , data=dfTransactionData, robust=TRUE) # We can obtain the marginal effects from a probit that uses robust standard errors. Note that marginal effects do not change, however, std. errors, and therefore, p-values change.
+rob.std.err <- b$mfxest[,2]
+
+stargazer(probit1, probit1,se=list(marg.std.err_probit, rob.std.err),omit=c("Constant"),coef = list(marginaleffects_probit,marginaleffects_probit),title="Regression Results", type="text", column.labels=c("Marginal Effects","Marg.Eff.w/RobStdEr" ),df=FALSE, digits=4, star.cutoffs = c(0.05,0.01,0.001))
+
+#Comparing Empty model with Probit model for model fit 
+probit1a <- glm(return~1, data=dfTransactionData, family=binomial(link="probit")) # This is the command to run a probit on null model 
+
+lrtest(probit1, probit1a)
+
+#checking Accuracy of the model
+pred = predict(probit1, data=dfTransactionData,type="response") 
+return_prediction <- ifelse(pred >= 0.5,1,0)  
+misClasificError <- mean(return_prediction != dfTransactionData$return) 
+print(paste('Accuracy',1-misClasificError))
+
+#Endogeneity
+#2SLS model
+#IVs: Ishomeowner, Length_of_residence, IsChild
+probitsls1<- ivreg(formula=return ~ bops + logprice  + factor(month_dummy)+factor(year)+ est_income_code + age_band+female | IsHomeowner + IsChild + length_of_residence + logprice + factor(month_dummy)+factor(year) + est_income_code + age_band + female , data=dfTransactionData)
+
+summary(probitsls1,diagnostics = TRUE) #sargan is significant
+
+#checking correlation of IVs with Return
+df<-dfTransactionData[c("return","bops","IsHomeowner","IsChild","length_of_residence")]
+cor(df) #remove Ishomeowner as it is highest correlated to Return
+
+#IVs: Length_of_residence, IsChild
+probitsls2<- ivreg(formula=return ~ bops + logprice  + factor(month_dummy)+factor(year)+ est_income_code + age_band+female | IsChild + length_of_residence + logprice + factor(month_dummy)+factor(year) + est_income_code + age_band + female , data=dfTransactionData)
+
+summary(probitsls2,diagnostics = TRUE) #sargan is significant
+
+#checking correlation of IVs with Return
+df<-dfTransactionData[c("return","bops","IsChild","length_of_residence")]
+cor(df) #remove length_of_residence as it is highest correlated to Return
+
+#IV model: IsChild
+probitIV<- ivreg(formula=return ~ bops + logprice  + factor(month_dummy)+factor(year)+age_band+est_income_code+female | IsChild + logprice  + factor(month_dummy)+factor(year)+age_band+est_income_code+female  ,data=dfTransactionData) # Now assume that the instrument variable is contract with customer firm. We will again obtain the IV estimator 
+
+summary(probitIV,diagnostics = TRUE) #F statistic > 10 and Hausman is ***. Therefore go with 2SLS results.
+
+stargazer( probitIV, 
+           title="Regression Results", type="text", 
+           column.labels=c("IV"),
+           df=FALSE, digits=2, star.cutoffs = c(0.05,0.01,0.001))
+
+```
+#==========================================================
+## Question 5 Impact of implementing BOPS on product level sales and return
+#==========================================================
+```{r SUMMARY, DATA CLEANING, DATA ADJUSTMENT, cullinearity}
+### SUMMARY STATISTIC
+## Basic Descriptive Statistics
+stargazer(OnlineDailyPCData, type="text", median=TRUE, iqr=TRUE,digits=1, title="Descriptive Statistics")
+
+
+### DATA ADJUSTMENT
+## NEW DATA SET
+NEWOnlineDailyPCData=OnlineDailyPCData
+OGOnlineDailyPCData = OnlineDailyPCData
+## GROUPING BY CHANNEL: 2&6 vs 5998
+NEWOnlineDailyPCData$ChannelGroup <- ifelse(NEWOnlineDailyPCData$store_number == 5998,0,1)
+## TIME ZONE
+NEWOnlineDailyPCData<-NEWOnlineDailyPCData[!(NEWOnlineDailyPCData$day>788),] #Since Sept. 26, 2011 is the last day that 5998 have not yet implemented BOPS, the day is actually 788 
+NEWOnlineDailyPCData$Time <- ifelse(NEWOnlineDailyPCData$day <= 365,0,1) # Since Aug. 1, 2011 is the day that 2 & 6 implemented BOPS, the day is 366
+
+OGOnlineDailyPCData$ChannelGroup <- ifelse(OGOnlineDailyPCData$store_number == 5998,0,1)
+## TIME ZONE
+OGOnlineDailyPCData<-OGOnlineDailyPCData[!(OGOnlineDailyPCData$day>788),] #Since Sept. 26, 2011 is the last day that 5998 have not yet implemented BOPS, the day is actually 788 
+OGOnlineDailyPCData$Time <- ifelse(OGOnlineDailyPCData$day <= 365,0,1) # Since Aug. 1, 2011 is the day that 2 & 6 implemented BOPS, the day is 366
+
+
+##DATA CLEANING - TABLE ONLINE DAILY SALES RETURNS DATA******
+# FOR AVG AGE
+#check how many entries have NA values
+sum(is.na(NEWOnlineDailyPCData$avg_age))
+summary(NEWOnlineDailyPCData$avg_age)
+MeanAge <- mean(NEWOnlineDailyPCData$avg_age, na.rm=TRUE)
+#replace NA vaues with mean of avg_age
+NEWOnlineDailyPCData$avg_age <- ifelse(is.na(NEWOnlineDailyPCData$avg_age) == TRUE, MeanAge, NEWOnlineDailyPCData$avg_age) 
+
+# FOR AVG FEMALE
+#check how many entries have NA values
+sum(is.na(NEWOnlineDailyPCData$avg_female))
+summary(NEWOnlineDailyPCData$avg_female)
+MeanAvgFemale = mean(NEWOnlineDailyPCData$avg_female, na.rm = TRUE)
+#MeanAvgFemale
+#replace NA vaues with mean of avg_female
+NEWOnlineDailyPCData$avg_female <- ifelse(is.na(NEWOnlineDailyPCData$avg_female) == TRUE, MeanAvgFemale, NEWOnlineDailyPCData$avg_female) 
+
+# FOR AVG CHILDOWNER
+#check how many entries have NA values
+sum(is.na(NEWOnlineDailyPCData$avg_childowner))
+summary(NEWOnlineDailyPCData$avg_childowner)
+MeanAvgChildowner = mean(NEWOnlineDailyPCData$avg_childowner, na.rm=TRUE)
+MeanAvgChildowner
+#replace NA vaues with mean of avg_childowner
+NEWOnlineDailyPCData$avg_childowner <- ifelse(is.na(NEWOnlineDailyPCData$avg_childowner) == TRUE, MeanAvgChildowner, NEWOnlineDailyPCData$avg_childowner)
+
+# FOR AVG HOMEOWNER
+#check how many entries have NA values
+sum(is.na(NEWOnlineDailyPCData$avg_homeowner))
+summary(NEWOnlineDailyPCData$avg_homeowner)
+MeanAvgHomeowner = mean(NEWOnlineDailyPCData$avg_homeowner, na.rm=TRUE)
+MeanAvgHomeowner
+#replace NA vaues with mean of avg_homeowner
+NEWOnlineDailyPCData$avg_homeowner <- ifelse(is.na(NEWOnlineDailyPCData$avg_homeowner) == TRUE, MeanAvgHomeowner, NEWOnlineDailyPCData$avg_homeowner)
+
+# FOR AVG INCOME
+#check how many entries have NA values
+sum(is.na(NEWOnlineDailyPCData$avg_income))
+summary(NEWOnlineDailyPCData$avg_income)
+MeanAvgIncome = mean(NEWOnlineDailyPCData$avg_income, na.rm=TRUE)
+MeanAvgIncome
+#replace NA vaues with mean of avg_income
+NEWOnlineDailyPCData$avg_income <- ifelse(is.na(NEWOnlineDailyPCData$avg_income) == TRUE, MeanAvgIncome, NEWOnlineDailyPCData$avg_income)
+
+# FOR AVG RESIDENCY
+#check how many entries have NA values
+sum(is.na(NEWOnlineDailyPCData$avg_residency))
+summary(NEWOnlineDailyPCData$avg_residency)
+MeanAvgResidency = mean(NEWOnlineDailyPCData$avg_residency, na.rm=TRUE)
+#replace NA vaues with mean of avg_residency
+NEWOnlineDailyPCData$avg_residency <- ifelse(is.na(NEWOnlineDailyPCData$avg_residency) == TRUE, MeanAvgResidency, NEWOnlineDailyPCData$avg_residency)
+
+## Distribution
+# Key Independent Variables-SALES
+ggplot(OnlineDailyPCData, aes(x=salesvalue)) + geom_histogram(fill="#56B4E9", col="dark blue") 
+ggplot(OnlineDailyPCData, aes(x=log(1+salesvalue))) + geom_histogram(fill="#56B4E9", col="dark blue") # we will use the log variable
+ggplot(OnlineDailyPCData, aes(x=salesquantity)) + geom_histogram(fill="#56B4E9", col="dark blue") 
+ggplot(OnlineDailyPCData, aes(x=log(1+salesquantity))) + geom_histogram(fill="#56B4E9", col="dark blue") # we will use the log variable
+# Key Independent Variables-RETURN
+ggplot(OnlineDailyPCData, aes(x=returnvalue)) + geom_histogram(fill="#56B4E9", col="dark blue") 
+ggplot(OnlineDailyPCData, aes(x=log(1+returnvalue))) + geom_histogram(fill="#56B4E9", col="dark blue") 
+ggplot(OnlineDailyPCData, aes(x=returnquantity)) + geom_histogram(fill="#56B4E9", col="dark blue") 
+ggplot(OnlineDailyPCData, aes(x=log(1+returnquantity))) + geom_histogram(fill="#56B4E9", col="dark blue") # we will use the log variable
+
+## ADJUSTED TO NORMAL DISTRIBUTION
+NEWOnlineDailyPCData$logsalesvalue <- log(1+NEWOnlineDailyPCData$salesvalue)
+NEWOnlineDailyPCData$logsalesquantity <- log(1+NEWOnlineDailyPCData$salesquantity)
+NEWOnlineDailyPCData$logreturnvalue = log(1 + NEWOnlineDailyPCData$returnvalue)
+NEWOnlineDailyPCData$logreturnquantity = log(1 + NEWOnlineDailyPCData$returnquantity)
+OGOnlineDailyPCData$logsalesvalue <- log(1+OGOnlineDailyPCData$salesvalue)
+OGOnlineDailyPCData$logsalesquantity <- log(1+OGOnlineDailyPCData$salesquantity)
+OGOnlineDailyPCData$logreturnvalue = log(1 + OGOnlineDailyPCData$returnvalue)
+OGOnlineDailyPCData$logreturnquantity = log(1 + OGOnlineDailyPCData$returnquantity)
+
+## Basic Descriptive Statistics after data cleaning
+stargazer(OnlineDailyPCData, type="text", median=TRUE, iqr=TRUE,digits=1, title="Descriptive Statistics")
+
+
+## Check Multicollineary
+df4 <- NEWOnlineDailyPCData[c("Time","ChannelGroup","avg_female","avg_age","avg_income","avg_homeowner","avg_residency","avg_childowner")]
+df5 <- NEWOnlineDailyPCData[c("Time","ChannelGroup","avg_female","avg_age","avg_income","avg_homeowner","avg_residency","avg_childowner")]
+df6 <- NEWOnlineDailyPCData[c("Time","ChannelGroup","avg_female","avg_age","avg_income","logsalesvalue")]
+df7 <- NEWOnlineDailyPCData[c("Time","ChannelGroup","avg_female","avg_age","avg_income","logsalesvalue")]
+cor(df4) # Generates the correlation matrix
+cor(df5) # Generates the correlation matrix
+cor(df6) # Generates the correlation matrix
+cor(df7) # Generates the correlation matrix
+vifcor(df4) # Calculates VIF scores
+vifcor(df5) # Calculates VIF scores
+vifcor(df6) # Calculates VIF scores
+vifcor(df7) # Calculates VIF scores
+```
+
+## SALES VALUE
+```{r}
+### SALESVALUE
+## MODEL DEVELOPMENT
+model5.1a <- lm(logsalesvalue~Time+ChannelGroup+Time*ChannelGroup+product_category+avg_female+avg_age+avg_income+avg_childowner, data=OGOnlineDailyPCData)
+model5.2a <- lm(logsalesvalue~Time+ChannelGroup+Time*ChannelGroup+product_category+avg_female+avg_age+avg_income+avg_childowner, data=NEWOnlineDailyPCData)
+# COMPARE WITH ORIGINAL DATA
+stargazer(model5.1a, model5.2a, title="Regression Results", type="text", column.labels=c("ORIGINAL DATASET", "ADJUSTED DATASET"), df=FALSE, digits=4, star.cutoffs = c(0.05,0.01,0.001))
+#before cleaning the data the interaction term is not significant. When data is cleaned the interaction term is significant.
+
+# Check for heteroscedasticity
+gqtest(model5.2a) # Significant Goldfeld-Quandt test is not significant
+bptest(model5.2a) # Significant Breusch-Pagan test is significant
+
+HWrobstder <- sqrt(diag(vcovHC(model5.2a, type="HC1"))) # produces Huber-White robust standard errors
+
+stargazer(model5.2a, model5.2a, se=list(NULL, HWrobstder), title="Regression Results", type="text", column.labels=c("Normal SE", "HW-Robust SE"), df=FALSE, digits=4, star.cutoffs = c(0.05,0.01,0.001)) # displays normal/HW robust standard errors.
+
+## FINAL RESULT
+# REGRESSION
+stargazer(model5.2a, se=list(HWrobstder), title="Regression Results", type="text", column.labels=c("HW-Robust SE"), df=FALSE, digits=4, star.cutoffs = c(0.05,0.01,0.001)) # displays normal/HW robust standard errors.
+
+# Marginal plots for SALES VALUE
+meffects5a <- ggpredict(model5.2a, terms=c("Time", "ChannelGroup")) 
+ggplot(meffects5a,aes(x, predicted, colour=group)) + geom_line(size=1.3) + xlab("Time") + ylab("Sales Value")  + labs(colour="Store Group") + 
+    scale_colour_discrete(labels=c("5998", "2 and 6"))+ scale_x_continuous(breaks=c(0,1), labels=c("No BOPS", "BOPS")) + theme(axis.title.x=element_blank())
+
+```
+## SALES QUANTITY
+```{r Poisson: sales quantity}
+## MODEL DEVELOPMENT
+poisson5.1b <- glm(salesquantity ~ Time+ChannelGroup+Time*ChannelGroup+product_category+avg_female+avg_age+avg_income+avg_childowner, family="poisson", data= OGOnlineDailyPCData)
+poisson5.2b <- glm(salesquantity ~ Time+ChannelGroup+Time*ChannelGroup+product_category+avg_female+avg_age+avg_income+avg_childowner, family="poisson", data= NEWOnlineDailyPCData)
+# COMPARE WITH ORIGINAL DATA
+stargazer(poisson5.1b,poisson5.2b,  
+          title="Regression Results", type="text", 
+          column.labels=c("ORIGINAL DATASET", "ADJUSTED DATASET"),
+          df=FALSE, digits=2, star.cutoffs = c(0.05,0.01,0.001)) # The coefficient for Time:ChannelGroup is -0.25.
+#before cleaning the data the interaction term is not significant. When data is cleaned the interaction term is significant.
+## Model fit assessment 
+poisson5.3b <- glm(salesquantity~1, data=NEWOnlineDailyPCData, family="poisson") #run null model 
+
+lrtest(poisson5.2b, poisson5.3b) # The test is statistically significant, it indicates that the data doesn't fit the model well.
+```
+```{r NB model for sales quantity}
+## MODEL DEVELOPMENT
+negbin5.1b <- glm.nb(salesquantity ~ Time+ChannelGroup+Time*ChannelGroup+product_category+avg_female+avg_age+avg_income+avg_childowner, data = OGOnlineDailyPCData)
+negbin5.2b <- glm.nb(salesquantity ~ Time+ChannelGroup+Time*ChannelGroup+product_category+avg_female+avg_age+avg_income+avg_childowner, data = NEWOnlineDailyPCData)
+# COMPARE WITH ORIGINAL DATA
+stargazer(negbin5.1b,negbin5.2b,  
+          title="Regression Results", type="text", 
+          column.labels=c("ORIGINAL DATASET", "ADJUSTED DATASET"),
+          df=FALSE, digits=2, star.cutoffs = c(0.05,0.01,0.001))# The variable Time:ChannelGroup has a coefficient of -0.31, which is statistically significant. This means that for each one-unit increase in , the expected log count of sales quantity decrease by 0.31. 
+
+# Model fit assessment
+negbin5.3b <- glm.nb(salesquantity ~ 1, data = NEWOnlineDailyPCData) 
+
+lrtest(negbin5.2b, negbin5.3b) # Model fits the data because LR test statistics (5755.2) is  significant.
+
+# Obtain IRRs
+stargazer(negbin5.2b, 
+          apply.coef = exp, t.auto=F, p.auto = F,
+          title="Regression Results", type="text", 
+          column.labels=c("IRRs"),
+          df=FALSE, digits=4, star.cutoffs = c(0.05,0.01,0.001)) # We might be interested in looking at incident rate ratios rather than coefficients. To do this, we can exponentiate our model coefficients. The output indicates that the incident rate for B:ChannelGroup is 0.7969.
+
+# Check for heteroscedasticity
+
+gqtest(negbin5.2b) # Goldfeld-Quandt test indicates heteroscedasticity
+bptest(negbin5.2b) # Breusch-Pagan test indicates heteroscedasticity
+
+HWrobstder <- sqrt(diag(vcovHC(negbin5.2b, type="HC1"))) # produces Huber-White robust standard errors 
+
+stargazer(negbin5.2b, negbin5.2b,  
+          se=list(NULL, HWrobstder),
+          title="Regression Results", type="text", 
+          column.labels=c("Normal SE", "HW-Robust SE"),
+          df=FALSE, digits=2, star.cutoffs = c(0.05,0.01,0.001))  # 
+
+```
+```{r model selection, results}
+# Choosing between Poisson and Negative Binomial regressions
+lrtest(poisson5.2b, negbin5.2b) # The significant p-value indicates that the negative bionomial model is more appropriate than the poisson model.
+
+## FINAL RESULT
+# REGRESSION
+stargazer(negbin5.2b, se=list(HWrobstder), apply.coef = exp, t.auto=F, p.auto = F, title="Regression Results", type="text", column.labels=c("IRRs"), df=FALSE, digits=4, star.cutoffs = c(0.05,0.01,0.001)) # displays normal/HW robust standard errors.
+
+# Marginal plots for SALES QUANTITY
+meffects5b <- ggpredict(negbin5.2b, terms=c("B [0,1]", "ChannelGroup [0,1]")) # generates a tidy data frame at three different values of competence  
+
+ggplot(meffects5b,aes(x, predicted, colour=group)) + geom_line(size=1.3) + 
+    xlab("BOPS implement timing") + ylab("Sales Quantity") +
+    labs(colour="Store Group") + 
+    scale_colour_discrete(labels=c("5998", "2 and 6"))+ scale_x_continuous(breaks=c(0,1), labels=c("No BOPS", "BOPS")) + theme(axis.title.x=element_blank())
+
+
+```
+
+## RETURN VALUE
+```{r}
+# MODEL DEVELOPMENT
+model5.1c<- lm(logreturnvalue~Time+ChannelGroup+Time*ChannelGroup+product_category+avg_female+avg_age+avg_income+logsalesvalue, data=OGOnlineDailyPCData) 
+
+model5.2c<- lm(logreturnvalue~Time+ChannelGroup+Time*ChannelGroup+product_category+avg_female+avg_age+avg_income+logsalesvalue, data=NEWOnlineDailyPCData) 
+
+stargazer(model5.1c, model5.2c, title="Regression Results", type="text", column.labels=c("ORIGINAL DATASET", "ADJUSTED DATASET"), df=FALSE, digits=4, star.cutoffs = c(0.05,0.01,0.001))
+
+# Check for heteroscedasticity
+gqtest(model5.2c) # Significant Goldfeld-Quandt test is significant
+bptest(model5.2c) # Significant Breusch-Pagan test is significant
+
+HWrobstder <- sqrt(diag(vcovHC(model5.2c, type="HC1"))) # produces Huber-White robust standard errors 
+stargazer(model5.2c, se=list(HWrobstder), title="Regression Results", type="text", column.labels=c("HW-Robust SE"), df=FALSE, digits=4, star.cutoffs = c(0.05,0.01,0.001)) # displays normal/HW robust standard errors.
+
+#Marginal plots for model with return value
+meffects5c <- ggpredict(model5.2c, terms=c("Time", "ChannelGroup")) 
+ggplot(meffects5c,aes(x, predicted, colour=group)) + geom_line(size=1.3) + xlab("Time") + ylab("Return Value")  +  labs(colour="Store Group") + 
+    scale_colour_discrete(labels=c("5998", "2 and 6"))+ scale_x_continuous(breaks=c(0,1), labels=c("No BOPS", "BOPS")) + theme(axis.title.x=element_blank())
+
+```
+## RETURN QUANTITY
+```{r Poisson: sales quantity}
+## MODEL DEVELOPMENT
+poisson5.1d <- glm(returnquantity~Time+ChannelGroup+Time*ChannelGroup+product_category+avg_female+avg_age+avg_income+logsalesvalue, family="poisson", data= OGOnlineDailyPCData)
+poisson5.2d <- glm(returnquantity~Time+ChannelGroup+Time*ChannelGroup+product_category+avg_female+avg_age+avg_income+logsalesvalue, family="poisson", data= NEWOnlineDailyPCData)
+# COMPARE WITH ORIGINAL DATA
+stargazer(poisson5.1d,poisson5.2d,  
+          title="Regression Results", type="text", 
+          column.labels=c("ORIGINAL DATASET", "ADJUSTED DATASET"),
+          df=FALSE, digits=2, star.cutoffs = c(0.05,0.01,0.001)) # The coefficient for Time:ChannelGroup is -0.25.
+#before cleaning the data the interaction term is not significant. When data is cleaned the interaction term is significant.
+
+## Model fit assessment 
+poisson5.3d <- glm(returnquantity~1, data=NEWOnlineDailyPCData, family="poisson") #run null model 
+
+lrtest(poisson5.2d, poisson5.3d) # The test is statistically significant, it indicates that the data does fit the model well.
+```
+```{r NB model for return quantity}
+## MODEL DEVELOPMENT
+negbin5.1d <- glm.nb(returnquantity~Time+ChannelGroup+Time*ChannelGroup+product_category+avg_female+avg_age+avg_income+logsalesvalue, data = OGOnlineDailyPCData)
+negbin5.2d <- glm.nb(returnquantity~Time+ChannelGroup+Time*ChannelGroup+product_category+avg_female+avg_age+avg_income+logsalesvalue, data = NEWOnlineDailyPCData)
+# COMPARE WITH ORIGINAL DATA
+stargazer(negbin5.1d,negbin5.2d,  
+          title="Regression Results", type="text", 
+          column.labels=c("negbin5.1d","negbin5.2d"),
+          df=FALSE, digits=2, star.cutoffs = c(0.05,0.01,0.001))# The variable B:ChannelGroup has a coefficient of -0.31, which is statistically significant. This means that for each one-unit increase in , the expected log count of sales quantity decrease by 0.31. 
+
+# Model fit assessment
+negbin5.3d <- glm.nb(salesquantity ~ 1, data = NEWOnlineDailyPCData) 
+
+lrtest(negbin5.2d, negbin5.3d) # Model fits the data because LR test statistics (968.55) is  significant.
+
+# Obtain IRRs
+stargazer(negbin5.2d, 
+          apply.coef = exp, t.auto=F, p.auto = F,
+          title="Regression Results", type="text", 
+          column.labels=c("IRRs"),
+          df=FALSE, digits=4, star.cutoffs = c(0.05,0.01,0.001)) # We might be interested in looking at incident rate ratios rather than coefficients. To do this, we can exponentiate our model coefficients. The output indicates that the incident rate for Time:ChannelGroup is 0.7969.
+
+# Check for heteroscedasticity
+
+gqtest(negbin5.2d) # Goldfeld-Quandt test indicates heteroscedasticity
+bptest(negbin5.2d) # Breusch-Pagan test indicates heteroscedasticity
+
+HWrobstder <- sqrt(diag(vcovHC(negbin5.2d, type="HC1"))) # produces Huber-White robust standard errors 
+
+stargazer(negbin5.2d, negbin5.2d,  
+          se=list(NULL, HWrobstder),
+          title="Regression Results", type="text", 
+          column.labels=c("Normal SE", "HW-Robust SE"),
+          df=FALSE, digits=2, star.cutoffs = c(0.05,0.01,0.001))  # 
+
+```
+```{r model selection, results}
+# Choosing between Poisson and Negative Binomial regressions
+lrtest(poisson5.2d, negbin5.2d) # The significant p-value indicates that the negative bionomial model is more appropriate than the poisson model.
+
+## FINAL RESULT
+# REGRESSION
+stargazer(negbin5.2d, se=list(HWrobstder), apply.coef = exp, t.auto=F, p.auto = F, title="Regression Results", type="text", column.labels=c("IRRs"), df=FALSE, digits=4, star.cutoffs = c(0.05,0.01,0.001)) # displays normal/HW robust standard errors.
+
+# Marginal plots for RETRUN QUANTITY
+meffects5d <- ggpredict(negbin5.2d, terms=c("Time [0,1]", "ChannelGroup [0,1]")) # generates a tidy data frame at three different values of competence  
+
+ggplot(meffects5d,aes(x, predicted, colour=group)) + geom_line(size=1.3) + 
+    xlab("BOPS implement timing") + ylab("Reutrn Quantity") +
+    labs(colour="Store Group") +  scale_colour_discrete(labels=c("5998", "2 and 6"))+ scale_x_continuous(breaks=c(0,1), labels=c("No BOPS", "BOPS")) + theme(axis.title.x=element_blank())
+```
+
+#==========================================================
+## Question 6: How does the impact of implementing BOPS strategy vary across product categories?
+#==========================================================
+```{r data preparation}
+
+## check distribution of dependent Variables
+ggplot(OnlineDailyPCData, aes(x=salesvalue)) + geom_histogram(colour="green") 
+ggplot(OnlineDailyPCData, aes(x=log(1+salesvalue))) + geom_histogram(colour="green") # we will use the log variable
+ggplot(OnlineDailyPCData, aes(x=returnvalue)) + geom_histogram(colour="green") 
+ggplot(OnlineDailyPCData, aes(x=log(1+returnvalue))) + geom_histogram(colour="green") # we will use the log variable
+
+### DATA ADJUSTMENT
+## NEW DATA SET
+OnlineDailyPCData_new = OnlineDailyPCData
+## ADJUSTED TO NORMAL DISTRIBUTION
+OnlineDailyPCData_new$log_salesvalue <- log(1+OnlineDailyPCData_new$salesvalue)
+OnlineDailyPCData_new$log_returnvalue <- log(1+OnlineDailyPCData_new$returnvalue)
+## GROUPING BY CHANNEL: 2&6 vs 5998
+OnlineDailyPCData_new$ChannelGroup <- ifelse(OnlineDailyPCData_new$store_number == 5998,0,1)
+## TIME ZONE
+OnlineDailyPCData_new<-OnlineDailyPCData_new[!(OnlineDailyPCData_new$day>788),] #Since Sept. 26, 2011 is the last day that 5998 have not yet implemented BOPS, the day is actually 788 
+OnlineDailyPCData_new$Time <- ifelse(OnlineDailyPCData_new$day <= 365,0,1) # Since Aug. 1, 2011 is the day that 2 & 6 implemented BOPS, the day is 366
+
+## Replace NA vaues with mean
+OnlineDailyPCData_new_wo_null = OnlineDailyPCData_new
+# avg_female 
+OnlineDailyPCData_new_wo_null$avg_female <- ifelse(is.na(OnlineDailyPCData_new_wo_null$avg_female) == TRUE, mean(OnlineDailyPCData_new_wo_null$avg_female, na.rm = TRUE), OnlineDailyPCData_new_wo_null$avg_female)
+# avg_age
+OnlineDailyPCData_new_wo_null$avg_age <- ifelse(is.na(OnlineDailyPCData_new_wo_null$avg_age) == TRUE, mean(OnlineDailyPCData_new_wo_null$avg_age,na.rm = TRUE), OnlineDailyPCData_new_wo_null$avg_age)
+# avg_income
+OnlineDailyPCData_new_wo_null$avg_income <- ifelse(is.na(OnlineDailyPCData_new_wo_null$avg_income) == TRUE, mean(OnlineDailyPCData_new_wo_null$avg_income,na.rm = TRUE), OnlineDailyPCData_new_wo_null$avg_income)
+# avg_homeowner
+OnlineDailyPCData_new_wo_null$avg_homeowner <- ifelse(is.na(OnlineDailyPCData_new_wo_null$avg_homeowner) == TRUE, mean(OnlineDailyPCData_new_wo_null$avg_homeowner,na.rm = TRUE), OnlineDailyPCData_new_wo_null$avg_homeowner)
+# avg_residency
+OnlineDailyPCData_new_wo_null$avg_residency <- ifelse(is.na(OnlineDailyPCData_new_wo_null$avg_residency) == TRUE, mean(OnlineDailyPCData_new_wo_null$avg_residency,na.rm = TRUE), OnlineDailyPCData_new_wo_null$avg_residency)
+# avg_childowner
+OnlineDailyPCData_new_wo_null$avg_childowner <- ifelse(is.na(OnlineDailyPCData_new_wo_null$avg_childowner) == TRUE, mean(OnlineDailyPCData_new_wo_null$avg_age,na.rm = TRUE), OnlineDailyPCData_new_wo_null$avg_childowner)
+
+## Basic Descriptive Statistics
+stargazer(OnlineDailyPCData_new_wo_null, type="text", median=TRUE, iqr=TRUE,digits=3, title="Descriptive Statistics")
+
+
+## Check Multicollineary
+df <- OnlineDailyPCData_new_wo_null[c("Time","ChannelGroup","avg_female","avg_age","avg_income","avg_homeowner","avg_residency","avg_childowner")]
+cor(df) # Generates the correlation matrix: correlation between ChannelGroup and avg_childowner is -0.978289958
+vifcor(df) #no multicolinearity in the data
+
+# factorization
+OnlineDailyPCData_new_wo_null$product_category <- as.factor(OnlineDailyPCData_new_wo_null$product_category)
+
+```
+
+```{r OLS Model: sales value} 
+
+# exclude avg_childowner and run OLS model
+lm_PCSV_1 <- lm(log_salesvalue~Time*ChannelGroup*product_category+avg_female+avg_age+avg_income, data=OnlineDailyPCData_new_wo_null)
+
+stargazer(lm_PCSV_1,
+          title="Regression Results", type="text", 
+          column.labels=c("Model-1"),
+          df=FALSE, digits=3, star.cutoffs = c(0.05,0.01,0.001)) 
+
+# Check HETEROSCEDASTICITY
+gqtest(lm_PCSV_1) # Significant Goldfeld-Quandt test does not indicate heteroscedasticity 
+bptest(lm_PCSV_1) # Significant Breusch-Pagan test indicates heteroscedasticity
+
+consstder <- sqrt(diag(vcovHC(lm_PCSV_1, type="const"))) # produces normal standard errors
+HWrobstder <- sqrt(diag(vcovHC(lm_PCSV_1, type="HC1"))) # produces Huber-White robust standard errors 
+clusrobstder <- sqrt(diag(cluster.vcov(lm_PCSV_1, OnlineDailyPCData_new_wo_null$product_category))) # produces clustered robust standard errors
+
+stargazer(lm_PCSV_1, lm_PCSV_1, lm_PCSV_1,  
+          se=list(consstder, HWrobstder,clusrobstder),
+          title="Regression Results", type="text", 
+          column.labels=c("Normal SE", "HW-Robust SE", "Clustered SE"),
+          df=FALSE, digits=2, star.cutoffs = c(0.05,0.01,0.001))  # displays normal/HW robust/clustered robust standard errors.
+
+
+# check missing product category
+any(OnlineDailyPCData_new_wo_null$product_category == 16) #returns false
+any(OnlineDailyPCData_new_wo_null$product_category == 18) #returns false
+any(OnlineDailyPCData_new_wo_null$product_category == 19) #returns false
+
+
+# visualize result
+meffects_lm_PCSV_1 <- ggpredict(lm_PCSV_1, terms=c("Time", "ChannelGroup", "product_category"), full.data = TRUE) # generates a data frame to see the impact on different product categories. 
+
+ggplot(meffects_lm_PCSV_1, aes(x = x, y = predicted, colour = group)) +
+    stat_smooth(method = "lm", se = FALSE) +
+    facet_wrap(~facet, ncol = 9) +
+    xlab("BIE") + ylab("Log Sales Value") +
+    labs(colour="Store Group") + 
+    scale_colour_discrete(labels=c("5998", "2 and 6")) +
+    scale_x_continuous(breaks=c(0,1), labels=c("N", "Y")) 
+
+```
+
+```{r Sales Value subset}
+#Used this code to generate subsets to obtain results for every product category.
+for(pc in 1:21)
+{
+  if(pc != 8 & pc != 10 & pc != 15 & pc != 16 & pc != 17 & pc != 18 & pc != 19) 
+  {
+    
+print(pc)
+## Data Preparation
+OnlineDailyPCData_subset = OnlineDailyPCData_new_wo_null[OnlineDailyPCData_new_wo_null$product_category == pc,] 
+
+# check data 
+head(OnlineDailyPCData_subset)
+any(OnlineDailyPCData_subset$product_category != pc) # should return 'FALSE'
+
+## Check Multicollineary
+df <- OnlineDailyPCData_subset[c("Time","ChannelGroup","avg_female","avg_age","avg_income","avg_homeowner","avg_residency","avg_childowner")]
+cor(df) # Generates the correlation matrix: correlation between Channel Group and avg_childowner is still high at 0.97334781.
+vifcor(df)
+
+#run OLS model
+lm_PCSV_subset <- lm(log_salesvalue~Time*ChannelGroup+avg_female+avg_age+avg_income, data=OnlineDailyPCData_subset)
+
+stargazer(lm_PCSV_subset,
+          title="Regression Results", type="text", 
+          column.labels=c("Model-1"),
+          df=FALSE, digits=3, star.cutoffs = c(0.05,0.01,0.001)) 
+
+# Check HETEROSCEDASTICITY
+gqtest(lm_PCSV_subset) # Significant Goldfeld-Quandt test does not indicate heteroscedasticity 
+bptest(lm_PCSV_subset) # Significant Breusch-Pagan test indicates heteroscedasticity
+
+consstder <- sqrt(diag(vcovHC(lm_PCSV_subset, type="const"))) # produces normal standard errors
+HWrobstder <- sqrt(diag(vcovHC(lm_PCSV_subset, type="HC1"))) # produces Huber-White robust standard errors 
+clusrobstder <- sqrt(diag(cluster.vcov(lm_PCSV_subset, OnlineDailyPCData_subset$ChannelGroup))) # produces clustered robust standard errors
+
+stargazer(lm_PCSV_subset, lm_PCSV_subset, lm_PCSV_subset,  
+          se=list(consstder, HWrobstder,clusrobstder),
+          title="Regression Results", type="text", 
+          column.labels=c("Normal SE", "HW-Robust SE", "Clustered SE"),
+          df=FALSE, digits=2, star.cutoffs = c(0.05,0.01,0.001))  # displays normal/HW robust/clustered robust standard errors.
+
+# visualize result
+meffects_lm_PCSV_subset <- ggpredict(lm_PCSV_subset, terms=c("Time", "ChannelGroup"), full.data = TRUE) 
+
+ggplot(meffects_lm_PCSV_subset, aes(x = x, y = predicted, colour = group)) +
+    stat_smooth(method = "lm", se = FALSE) +
+    xlab("BIE") + ylab("Log Sales Value") +
+    labs(colour="Store Group") + 
+    scale_colour_discrete(labels=c("5998", "2 and 6")) +
+    scale_x_continuous(breaks=c(0,1), labels=c("N", "Y")) 
+  }
+}
+
+```
+
+```{r OLS: return value}
+
+## OLS Model: return value
+lm_PCRV_1 <- lm(log_returnvalue~Time*ChannelGroup*product_category+avg_female+avg_age+avg_income, data=OnlineDailyPCData_new_wo_null)
+
+stargazer(lm_PCRV_1,
+          title="Regression Results", type="text", 
+          column.labels=c("Model-1"),
+          df=FALSE, digits=3, star.cutoffs = c(0.05,0.01,0.001)) 
+
+# Check HETEROSCEDASTICITY
+gqtest(lm_PCRV_1) # Significant Goldfeld-Quandt test does not indicate heteroscedasticity 
+bptest(lm_PCRV_1) # Significant Breusch-Pagan test indicates heteroscedasticity
+
+consstder <- sqrt(diag(vcovHC(lm_PCRV_1, type="const"))) # produces normal standard errors
+HWrobstder <- sqrt(diag(vcovHC(lm_PCRV_1, type="HC1"))) # produces Huber-White robust standard errors 
+clusrobstder <- sqrt(diag(cluster.vcov(lm_PCRV_1, OnlineDailyPCData_new_wo_null$product_category))) # produces clustered robust standard errors
+
+stargazer(lm_PCRV_1, lm_PCRV_1, lm_PCRV_1,  
+          se=list(consstder, HWrobstder,clusrobstder),
+          title="Regression Results", type="text", 
+          column.labels=c("Normal SE", "HW-Robust SE", "Clustered SE"),
+          df=FALSE, digits=2, star.cutoffs = c(0.05,0.01,0.001))  # displays normal/HW robust/clustered robust standard errors. 
+
+# visualize result
+meffects_lm_PCRV_1 <- ggpredict(lm_PCRV_1, terms=c("Time", "ChannelGroup", "product_category"), full.data = TRUE) # generates a tidy data frame to see the impact on different product categories. 
+
+ggplot(meffects_lm_PCRV_1, aes(x = x, y = predicted, colour = group)) +
+    stat_smooth(method = "lm", se = FALSE) +
+    facet_wrap(~facet, ncol = 9) +
+    xlab("BIE") + ylab("Log Return Value") +
+    labs(colour="Store Group") + 
+    scale_colour_discrete(labels=c("5998", "2 and 6")) +
+    scale_x_continuous(breaks=c(0,1), labels=c("No BOPS", "BOPs")) 
+```
+
+```{r Retrun Value subset}
+#run for loop to check across all product categories
+for(pc in 1:21)
+{
+  if(pc != 8 & pc != 10 & pc != 15 & pc != 16 & pc != 17 & pc != 18 & pc != 19) 
+  {
+    print(pc)
+    ## Data Preparation
+    OnlineDailyPCData_subset = OnlineDailyPCData_new_wo_null[OnlineDailyPCData_new_wo_null$product_category == pc,] 
+    
+    # check data 
+    head(OnlineDailyPCData_subset)
+    any(OnlineDailyPCData_subset$product_category != pc) # should feedback 'FALSE'
+    
+    ## Check Multicollineary
+    df <- OnlineDailyPCData_subset[c("Time","ChannelGroup","avg_female","avg_age","avg_income","avg_homeowner","avg_residency","avg_childowner")]
+    
+    cor(df) # Generates the correlation matrix: correlation between Channel Group and avg_childowner is still high at 0.97334781.
+    vifcor(df)
+    
+    # exclude avg_childowner and run OLS model
+    lm_PCSV_subset <- lm(log_returnvalue~Time*ChannelGroup+avg_female+avg_age+avg_income, data=OnlineDailyPCData_subset)
+    
+    stargazer(lm_PCSV_subset,
+              title="Regression Results", type="text", 
+              column.labels=c("Model-1"),
+              df=FALSE, digits=3, star.cutoffs = c(0.05,0.01,0.001)) 
+    
+    # Check HETEROSCEDASTICITY
+    gqtest(lm_PCSV_subset) # Significant Goldfeld-Quandt test does not indicate heteroscedasticity 
+    bptest(lm_PCSV_subset) # Significant Breusch-Pagan test indicates heteroscedasticity
+    
+    consstder <- sqrt(diag(vcovHC(lm_PCSV_subset, type="const"))) # produces normal standard errors
+    HWrobstder <- sqrt(diag(vcovHC(lm_PCSV_subset, type="HC1"))) # produces Huber-White robust standard errors 
+    clusrobstder <- sqrt(diag(cluster.vcov(lm_PCSV_subset, OnlineDailyPCData_subset$ChannelGroup))) # produces clustered robust standard errors
+    
+    stargazer(lm_PCSV_subset, lm_PCSV_subset, lm_PCSV_subset,  
+              se=list(consstder, HWrobstder,clusrobstder),
+              title="Regression Results", type="text", 
+              column.labels=c("Normal SE", "HW-Robust SE", "Clustered SE"),
+              df=FALSE, digits=2, star.cutoffs = c(0.05,0.01,0.001))  # displays normal/HW robust/clustered robust standard errors.
+    
+    ggplot(OnlineDailyPCData_subset, aes(x=ChannelGroup, y=log_returnvalue, fill=ChannelGroup)) + geom_boxplot() + xlab("ChannelGroup") + ylab("log_returnvalue") 
+    
+    
+    # visualize result
+    meffects_lm_PCSV_subset <- ggpredict(lm_PCSV_subset, terms=c("Time", "ChannelGroup"), full.data = TRUE) 
+    
+    ggplot(meffects_lm_PCSV_subset, aes(x = x, y = predicted, colour = group)) +
+        stat_smooth(method = "lm", se = FALSE) +
+        xlab("BIE") + ylab("Log return Value") +
+        labs(colour="Store Group") + 
+        scale_colour_discrete(labels=c("5998", "2 and 6")) +
+        scale_x_continuous(breaks=c(0,1), labels=c("N", "Y")) 
+}
+  
+}
+```
+
+```{r Poisson: sales quantity}
+
+poisson_PCSQ_1 <- glm(salesquantity~Time*ChannelGroup*product_category+avg_female+avg_age+avg_income, family="poisson", data= OnlineDailyPCData_new_wo_null)
+
+stargazer(poisson_PCSQ_1,  
+          title="Regression Results", type="text", 
+          column.labels=c("poisson1"),
+          df=FALSE, digits=2, star.cutoffs = c(0.05,0.01,0.001)) # The coefficient for Time:ChannelGroup is -0.25.
+
+## Model fit assessment 
+poisson_PCSQ_1a <- glm(salesquantity~1, data=OnlineDailyPCData_new_wo_null, family="poisson") #run null model 
+
+lrtest(poisson_PCSQ_1, poisson_PCSQ_1a) # The test is statistically significant, it indicates that the data does fit the model well.
+
+```
+
+```{r NB model: sales quantity}
+
+negbin_PCSQ_1 <- glm.nb(salesquantity~Time*ChannelGroup*product_category+avg_female+avg_age+avg_income, data = OnlineDailyPCData_new_wo_null)
+
+stargazer(negbin_PCSQ_1,  
+          title="Regression Results", type="text", 
+          column.labels=c("negbin1"),
+          df=FALSE, digits=2, star.cutoffs = c(0.05,0.01,0.001))# The variable Time:ChannelGroup has a coefficient of -0.31, which is statistically significant. This means that for each one-unit increase in , the expected log count of sales quantity decrease by 0.31. 
+
+# Model fit assessment
+negbin_PCSQ_1a <- glm.nb(salesquantity ~ 1, data = OnlineDailyPCData_new_wo_null) 
+
+lrtest(negbin_PCSQ_1, negbin_PCSQ_1a) # Model fits the data because LR test statistics (968.55) is  significant.
+
+lrtest(poisson_PCSQ_1, negbin_PCSQ_1) # The significant p-value indicates that the negative binomial model is more appropriate than the poisson model.
+
+# Obtain IRRs
+stargazer(negbin_PCSQ_1, 
+          apply.coef = exp, t.auto=F, p.auto = F,
+          title="Regression Results", type="text", 
+          column.labels=c("IRRs"),
+          df=FALSE, digits=4, star.cutoffs = c(0.05,0.01,0.001)) # We might be interested in looking at incident rate ratios rather than coefficients. To do this, we can exponentiate our model coefficients. The output indicates that the incident rate for Time:ChannelGroup is 0.7302.
+
+# Check for heteroscedasticity
+gqtest(negbin_PCSQ_1) # Goldfeld-Quandt test does not indicate heteroscedasticity
+bptest(negbin_PCSQ_1) # Breusch-Pagan test indicates heteroscedasticity
+
+consstder <- sqrt(diag(vcovHC(negbin_PCSQ_1, type="const"))) # produces normal standard errors
+HWrobstder <- sqrt(diag(vcovHC(negbin_PCSQ_1, type="HC1"))) # produces Huber-White robust standard errors 
+clusrobstder <- sqrt(diag(cluster.vcov(negbin_PCSQ_1, OnlineDailyPCData_new_wo_null$product_category))) # produces clustered robust standard errors
+
+stargazer(negbin_PCSQ_1, negbin_PCSQ_1, negbin_PCSQ_1,  
+          se=list(consstder, HWrobstder,clusrobstder),
+          title="Regression Results", type="text", 
+          column.labels=c("Normal SE", "HW-Robust SE", "Clustered SE"),
+          df=FALSE, digits=2, star.cutoffs = c(0.05,0.01,0.001))  # displays normal/HW robust/clustered robust standard errors. 
+
+stargazer(negbin_PCSQ_1, negbin_PCSQ_1, negbin_PCSQ_1, 
+          apply.coef = exp, t.auto=F, p.auto = F,
+          se=list(consstder, HWrobstder,clusrobstder),
+          title="Regression Results", type="text", 
+          column.labels=c("Normal SE", "HW-Robust SE", "Clustered SE"),
+          df=FALSE, digits=2, star.cutoffs = c(0.05,0.01,0.001))  # displays normal/HW robust/clustered robust standard errors. 
+
+
+# Visualize the output
+meffects_negbin_PCSQ_1 <- ggpredict(negbin_PCSQ_1, terms=c("Time", "ChannelGroup", "product_category"), full.data = TRUE) # generates a tidy data frame to see the impact on different product categories. 
+
+ggplot(meffects_negbin_PCSQ_1, aes(x = x, y = predicted, colour = group)) +
+    stat_smooth(method = "lm", se = FALSE) +
+    facet_wrap(~facet, ncol = 9) +
+    xlab("BIE") + ylab("Sales Quantity") +
+    labs(colour="Store Group") + 
+    scale_colour_discrete(labels=c("5998", "2 and 6")) +
+    scale_x_continuous(breaks=c(0,1), labels=c("N", "Y")) 
+
+
+
+```
+
+```{r Poisson: return quantity}
+
+poisson_PCRQ_1 <- glm(returnquantity~Time*ChannelGroup*product_category+avg_female+avg_age+avg_income, family="poisson", data= OnlineDailyPCData_new_wo_null)
+
+stargazer(poisson_PCRQ_1,  
+          title="Regression Results", type="text", 
+          column.labels=c("poisson1"),
+          df=FALSE, digits=2, star.cutoffs = c(0.05,0.01,0.001)) # The coefficient for B:ChannelGroup is -0.25.
+
+## Model fit assessment 
+poisson_PCRQ_1a <- glm(returnquantity~1, data=OnlineDailyPCData_new_wo_null, family="poisson") #run null model 
+
+lrtest(poisson_PCRQ_1, poisson_PCRQ_1a) # The test is statistically significant, it indicates that the data does fit the model well.
+
+```
+
+```{r NB model for return quantity}
+
+negbin_PCRQ_1 <- glm.nb(returnquantity~Time*ChannelGroup*product_category+avg_female+avg_age+avg_income, data = OnlineDailyPCData_new_wo_null)
+
+stargazer(negbin_PCRQ_1,  
+          title="Regression Results", type="text", 
+          column.labels=c("negbin1"),
+          df=FALSE, digits=2, star.cutoffs = c(0.05,0.01,0.001))# The variable B:ChannelGroup has a coefficient of -0.31, which is statistically significant. This means that for each one-unit increase in , the expected log count of sales quantity decrease by 0.31. 
+
+# Model fit assessment
+negbin_PCRQ_1a <- glm.nb(returnquantity ~ 1, data = OnlineDailyPCData_new_wo_null) 
+
+lrtest(negbin_PCRQ_1, negbin_PCRQ_1a) # Model fits the data because LR test statistics (968.55) is  significant.
+
+# Obtain IRRs
+stargazer(negbin_PCRQ_1, 
+          apply.coef = exp, t.auto=F, p.auto = F,
+          title="Regression Results", type="text", 
+          column.labels=c("IRRs"),
+          df=FALSE, digits=4, star.cutoffs = c(0.05,0.01,0.001)) # We might be interested in looking at incident rate ratios rather than coefficients. To do this, we can exponentiate our model coefficients. The output indicates that the incident rate for B:ChannelGroup is 0.7302.
+
+# Check for heteroscedasticity
+gqtest(negbin_PCRQ_1) # Goldfeld-Quandt test does not indicate heteroscedasticity
+bptest(negbin_PCRQ_1) # Breusch-Pagan test indicates heteroscedasticity
+
+Hconsstder <- sqrt(diag(vcovHC(negbin_PCRQ_1, type="const"))) # produces normal standard errors
+HWrobstder <- sqrt(diag(vcovHC(negbin_PCRQ_1, type="HC1"))) # produces Huber-White robust standard errors 
+clusrobstder <- sqrt(diag(cluster.vcov(negbin_PCRQ_1, OnlineDailyPCData_new_wo_null$product_category))) # produces clustered robust standard errors
+
+stargazer(negbin_PCRQ_1, negbin_PCRQ_1, negbin_PCRQ_1,  
+          se=list(consstder, HWrobstder,clusrobstder),
+          title="Regression Results", type="text", 
+          column.labels=c("Normal SE", "HW-Robust SE", "Clustered SE"),
+          df=FALSE, digits=2, star.cutoffs = c(0.05,0.01,0.001))  # displays normal/HW robust/clustered robust standard errors. 
+
+stargazer(negbin_PCRQ_1, negbin_PCRQ_1, negbin_PCRQ_1, 
+          apply.coef = exp, t.auto=F, p.auto = F,
+          se=list(consstder, HWrobstder,clusrobstder),
+          title="Regression Results", type="text", 
+          column.labels=c("Normal SE", "HW-Robust SE", "Clustered SE"),
+          df=FALSE, digits=2, star.cutoffs = c(0.05,0.01,0.001))  # displays normal/HW robust/clustered robust standard errors. 
+
+# Visualize the output
+meffects_negbin_PCRQ_1 <- ggpredict(negbin_PCRQ_1, terms=c("Time", "ChannelGroup", "product_category")) # generates a tidy data frame to see the impact on different product categories. 
+
+ggplot(meffects_negbin_PCRQ_1, aes(x = x, y = predicted, colour = group)) +
+    stat_smooth(method = "lm", se = FALSE) +
+    facet_wrap(~facet, ncol = 9) +
+    xlab("BIE") + ylab("Return Quantity") +
+    labs(colour="Store Group") + 
+    scale_colour_discrete(labels=c("5998", "2 and 6")) +
+    scale_x_continuous(breaks=c(0,1), labels=c("N", "Y")) 
+
+```
